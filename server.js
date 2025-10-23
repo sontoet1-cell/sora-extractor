@@ -1,123 +1,39 @@
 import express from "express";
 import cors from "cors";
-import { chromium } from "playwright";
+import fetch from "node-fetch";
 
 const app = express();
+app.use(cors({ origin: "*" }));
 app.use(express.json());
-app.use(cors());
 
-// ⚡ Base health route
-app.get("/", (_, res) =>
-  res
-    .status(200)
-    .type("text")
-    .send("OK - Sora Extractor running. Use /api/extract?url=...")
-);
+// Kiểm tra hoạt động
+app.get("/health", (req, res) => {
+  res.json({ ok: true, now: new Date().toISOString() });
+});
 
-// ⚙️ Launch options
-const LAUNCH_OPTIONS = {
-  headless: process.env.PW_HEADLESS !== "0",
-  args: [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--single-process",
-    "--no-zygote",
-    "--disable-features=VizDisplayCompositor",
-  ],
-};
+// Route chính
+app.get("/api/sora", async (req, res) => {
+  const input = req.query.url;
+  res.setHeader("Access-Control-Allow-Origin", "*");
 
-// 🧠 Helper timeout
-const withTimeout = (p, ms) =>
-  Promise.race([
-    p,
-    new Promise((_, rej) =>
-      setTimeout(() => rej(new Error(`Timed out after ${ms}ms`)), ms)
-    ),
-  ]);
+  if (!input) return res.status(400).json({ ok: false, error: "missing ?url=" });
 
-// 🎯 API endpoint
-app.get("/api/extract", async (req, res) => {
-  const pageUrl = (req.query.url || "").trim();
-  console.log("[extract] ->", pageUrl);
-
-  if (!pageUrl)
-    return res.status(400).json({ ok: false, error: "Missing url" });
-
-  if (/(chatgpt\.com|openai\.com)/i.test(pageUrl))
-    return res
-      .status(400)
-      .json({ ok: false, error: "chatgpt.com / openai.com not supported" });
-
-  // ✅ Nếu link là file video trực tiếp thì trả luôn
-  if (/\.(mp4|m3u8)(\?|$)/i.test(pageUrl)) {
-    return res.json({
-      ok: true,
-      normalized: {
-        page_url: pageUrl,
-        direct_video: pageUrl,
-        mp4: /\.mp4/i.test(pageUrl) ? pageUrl : null,
-        m3u8: /\.m3u8/i.test(pageUrl) ? pageUrl : null,
-        all: [pageUrl],
-      },
-    });
-  }
-
-  let browser, context, page;
   try {
-    browser = await chromium.launch(LAUNCH_OPTIONS);
-    context = await browser.newContext();
-    page = await context.newPage();
-
-    const hits = [];
-    page.on("requestfinished", (req) => {
-      const u = req.url();
-      if (/\.(mp4|m3u8)(\?|$)/i.test(u)) hits.push(u);
-    });
-
-    console.log("[goto] visiting:", pageUrl);
-
-    // Không dùng networkidle vì dễ treo, chỉ chờ load
-    await withTimeout(page.goto(pageUrl, { waitUntil: "load", timeout: 25000 }), 30000);
-
-    const dom = await page.evaluate(() => {
-      const out = [];
-      for (const el of document.querySelectorAll("video,source")) {
-        const s = el.src || el.getAttribute("src") || el.getAttribute("data-src");
-        if (s) out.push(s);
-      }
-      return Array.from(new Set(out));
-    });
-
-    const all = Array.from(new Set([...hits, ...dom]));
-    if (!all.length)
-      return res.status(404).json({ ok: false, error: "No video found", links: [] });
-
-    const mp4 = all.find((u) => /\.mp4(\?|$)/i.test(u)) || null;
-    const m3u8 = all.find((u) => /\.m3u8(\?|$)/i.test(u)) || null;
-
-    res.json({
-      ok: true,
-      normalized: {
-        page_url: pageUrl,
-        direct_video: mp4 || m3u8 || all[0],
-        mp4,
-        m3u8,
-        all,
-      },
-    });
+    const upstream = process.env.UPSTREAM || "https://savesora.com/api/proxy-download";
+    const r = await fetch(`${upstream}?url=${encodeURIComponent(input)}`);
+    const ct = r.headers.get("content-type") || "application/json";
+    const body = await r.text();
+    res.setHeader("Content-Type", ct);
+    res.status(r.status).send(body);
   } catch (e) {
-    console.error("[extract][error]", e);
-    res.status(500).json({ ok: false, error: String(e?.message || e) });
-  } finally {
-    try {
-      await page?.close();
-      await context?.close();
-      await browser?.close();
-    } catch {}
+    res.status(500).json({ ok: false, error: "server_error", message: e?.message || String(e) });
   }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log("✅ Server running on port", port));
+// Mặc định
+app.get("/", (req, res) => {
+  res.type("text/plain").send("Sora Extractor ready!\nGET /api/sora?url=<link>");
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("[Sora Extractor] listening on", PORT));
