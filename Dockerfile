@@ -1,5 +1,5 @@
 # Dockerfile (Playwright image)
-FROM mcr.microsoft.com/playwright:v1.47.0-jammy
+FROM mcr.microsoft.com/playwright:v1.56.1-jammy
 
 WORKDIR /app
 COPY package*.json ./
