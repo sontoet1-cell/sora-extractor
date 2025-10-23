@@ -1,20 +1,13 @@
-# Dùng image Playwright đúng phiên bản (Ubuntu jammy)
-FROM mcr.microsoft.com/playwright:v1.56.1-jammy
+# Dockerfile (Playwright image)
+FROM mcr.microsoft.com/playwright:v1.47.0-jammy
 
 WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev || npm i --production
 
-# copy trước để cache npm
-COPY package.json package-lock.json* ./
-RUN npm install
-
-# đảm bảo chromium có sẵn (safe cho Render Free)
-RUN npx playwright install --with-deps chromium
-
-# copy source
 COPY . .
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=0
+EXPOSE 10000
 
-ENV PW_HEADLESS=1
-ENV PORT=3000
-
-EXPOSE 3000
 CMD ["node", "server.js"]

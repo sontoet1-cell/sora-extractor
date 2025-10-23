@@ -1,14 +1,16 @@
 {
-  "name": "sora-extractor",
+  "name": "sora-extractor-playwright",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
     "cors": "^2.8.5",
-    "node-fetch": "^3.3.2"
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2",
+    "playwright": "^1.47.0"
   },
   "engines": {
     "node": ">=18"
