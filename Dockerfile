@@ -1,24 +1,17 @@
-# 🧱 Dùng image Playwright mới nhất tương thích 1.56.1
+# Use the Playwright 1.56.1 base image
 FROM mcr.microsoft.com/playwright:v1.56.1-focal
 
-# Tạo thư mục làm việc
+# Set working directory
 WORKDIR /app
 
-# Copy package trước để cache npm install
-COPY package.json package-lock.json* ./
-
-# Cài dependencies
-RUN npm install --production
-
-# Copy toàn bộ source code
+# Copy all files
 COPY . .
 
-# Thiết lập biến môi trường
-ENV PW_HEADLESS=1
-ENV PORT=3000
+# Install dependencies
+RUN npm install
 
-# Mở cổng 3000
+# Expose port
 EXPOSE 3000
 
-# Chạy server
+# Run the app
 CMD ["node", "server.js"]
